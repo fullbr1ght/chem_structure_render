@@ -6,7 +6,6 @@ from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem import rdDepictor
 from PIL import Image
 
-
 app = FastAPI()
 
 
@@ -20,6 +19,20 @@ def build_mol_from_smiles(smiles: str):
     return mol
 
 
+def apply_custom_palette(opts):
+    opts.updateAtomPalette({
+        6: (0.10, 0.10, 0.10),   # C - near black
+        7: (0.08, 0.38, 0.78),   # N - blue
+        8: (0.82, 0.16, 0.16),   # O - red
+        9: (0.00, 0.58, 0.68),   # F - teal
+        15: (0.76, 0.54, 0.10),  # P - warm golden ochre
+        16: (0.84, 0.68, 0.10),  # S - acid-gold / yellow
+        17: (0.12, 0.58, 0.30),  # Cl - green
+        35: (0.45, 0.24, 0.08),  # Br - deeper brown
+        53: (0.50, 0.24, 0.66),  # I - violet
+    })
+
+
 @app.get("/render/svg")
 def render_svg(smiles: str):
     mol = build_mol_from_smiles(smiles)
@@ -27,7 +40,10 @@ def render_svg(smiles: str):
     drawer = rdMolDraw2D.MolDraw2DSVG(500, 300)
     opts = drawer.drawOptions()
     opts.clearBackground = False
-    opts.bondLineWidth = 3
+    opts.bondLineWidth = 3.5
+    opts.baseFontSize = 0.8
+    opts.splitBonds = False
+    apply_custom_palette(opts)
 
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
@@ -45,7 +61,10 @@ def render_png(smiles: str):
     drawer = rdMolDraw2D.MolDraw2DCairo(500, 300)
     opts = drawer.drawOptions()
     opts.clearBackground = False
-    opts.bondLineWidth = 3
+    opts.bondLineWidth = 3.5
+    opts.baseFontSize = 0.8
+    opts.splitBonds = False
+    apply_custom_palette(opts)
 
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
