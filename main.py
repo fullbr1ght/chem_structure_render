@@ -40,8 +40,12 @@ def render_svg(smiles: str):
     drawer = rdMolDraw2D.MolDraw2DSVG(500, 300)
     opts = drawer.drawOptions()
     opts.clearBackground = False
-    opts.bondLineWidth = 3.5
-    opts.baseFontSize = 0.8
+    opts.bondLineWidth = 2.3
+    opts.fixedBondLength = 23
+    opts.padding = 0.10
+    opts.additionalAtomLabelPadding = 0.15
+    opts.prepareMolsBeforeDrawing = True
+    opts.baseFontSize = 0.7
     opts.splitBonds = False
     apply_custom_palette(opts)
 
@@ -61,8 +65,12 @@ def render_png(smiles: str):
     drawer = rdMolDraw2D.MolDraw2DCairo(500, 300)
     opts = drawer.drawOptions()
     opts.clearBackground = False
-    opts.bondLineWidth = 3.5
-    opts.baseFontSize = 0.8
+    opts.bondLineWidth = 2.3
+    opts.fixedBondLength = 23
+    opts.padding = 0.10
+    opts.additionalAtomLabelPadding = 0.15
+    opts.prepareMolsBeforeDrawing = True
+    opts.baseFontSize = 0.7
     opts.splitBonds = False
     apply_custom_palette(opts)
 
