@@ -5,9 +5,31 @@ from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem import rdDepictor
 from PIL import Image
+from pathlib import Path
+from rdkit.Chem import inchi
 
 app = FastAPI()
 
+DEPICTIONS_DIR = Path(__file__).parent / "depictions"
+
+def load_depiction_overrides():
+    overrides = {}
+
+    for sdf_path in DEPICTIONS_DIR.glob("*.sdf"):
+        supplier = Chem.SDMolSupplier(
+            str(sdf_path), 
+            removeHs=True, 
+        )
+
+        for mol in supplier:
+            if mol is not None:
+                Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+                inchikey = inchi.MolToInchiKey(mol)
+                overrides[inchikey] = mol
+
+    return overrides
+
+DEPICTION_OVERRIDES = load_depiction_overrides()
 
 def build_mol_from_smiles(smiles: str):
     mol = Chem.MolFromSmiles(smiles)
@@ -15,9 +37,14 @@ def build_mol_from_smiles(smiles: str):
     if mol is None:
         raise HTTPException(status_code=400, detail="Invalid SMILES")
 
+    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+    inchikey = inchi.MolToInchiKey(mol)
+
+    if inchikey in DEPICTION_OVERRIDES:
+        return Chem.Mol(DEPICTION_OVERRIDES[inchikey])
+
     rdDepictor.Compute2DCoords(mol)
     return mol
-
 
 def apply_custom_palette(opts):
     opts.updateAtomPalette({
