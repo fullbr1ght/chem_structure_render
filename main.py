@@ -41,7 +41,6 @@ def render_svg(smiles: str):
     opts = drawer.drawOptions()
     opts.clearBackground = False
     opts.bondLineWidth = 2.3
-    opts.fixedBondLength = 23
     opts.padding = 0.10
     opts.additionalAtomLabelPadding = 0.15
     opts.prepareMolsBeforeDrawing = True
@@ -66,7 +65,6 @@ def render_png(smiles: str):
     opts = drawer.drawOptions()
     opts.clearBackground = False
     opts.bondLineWidth = 2.3
-    opts.fixedBondLength = 23
     opts.padding = 0.10
     opts.additionalAtomLabelPadding = 0.15
     opts.prepareMolsBeforeDrawing = True
