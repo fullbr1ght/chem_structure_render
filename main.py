@@ -1,10 +1,7 @@
-from io import BytesIO
-
 from fastapi import FastAPI, HTTPException, Response
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem import rdDepictor
-from PIL import Image
 from pathlib import Path
 from rdkit.Chem import inchi
 
@@ -64,7 +61,7 @@ def apply_custom_palette(opts):
 def render_svg(smiles: str):
     mol = build_mol_from_smiles(smiles)
 
-    drawer = rdMolDraw2D.MolDraw2DSVG(500, 300)
+    drawer = rdMolDraw2D.MolDraw2DSVG(500, 500)
     opts = drawer.drawOptions()
     opts.clearBackground = False
     opts.bondLineWidth = 2.5
@@ -82,33 +79,3 @@ def render_svg(smiles: str):
     svg = svg.replace("<svg", '<svg style="background-color:white"', 1)
 
     return Response(content=svg, media_type="image/svg+xml")
-
-
-@app.get("/render/png")
-def render_png(smiles: str):
-    mol = build_mol_from_smiles(smiles)
-
-    drawer = rdMolDraw2D.MolDraw2DCairo(500, 300)
-    opts = drawer.drawOptions()
-    opts.clearBackground = False
-    opts.bondLineWidth = 2.5
-    opts.padding = 0.06
-    opts.additionalAtomLabelPadding = 0.05
-    opts.prepareMolsBeforeDrawing = True
-    opts.baseFontSize = 0.7
-    opts.splitBonds = False
-    apply_custom_palette(opts)
-
-    drawer.DrawMolecule(mol)
-    drawer.FinishDrawing()
-
-    png_bytes = drawer.GetDrawingText()
-
-    image = Image.open(BytesIO(png_bytes)).convert("RGBA")
-    white_bg = Image.new("RGBA", image.size, "WHITE")
-    white_bg.alpha_composite(image)
-
-    output = BytesIO()
-    white_bg.convert("RGB").save(output, format="PNG")
-
-    return Response(content=output.getvalue(), media_type="image/png")
