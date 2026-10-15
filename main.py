@@ -1,8 +1,10 @@
+import math
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Response
 from rdkit import Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 from rdkit.Chem import rdDepictor
-from pathlib import Path
 from rdkit.Chem import inchi
 
 app = FastAPI()
@@ -46,8 +48,14 @@ def build_mol_from_smiles(smiles: str):
             detail="Structure has too many atoms",
         )
 
+    inchikey = inchi.MolToInchiKey(mol)
+    override = DEPICTION_OVERRIDES.get(inchikey)
+
+    if override is not None:
+        return Chem.Mol(override), True
+
     rdDepictor.Compute2DCoords(mol)
-    return mol
+    return mol, False
 
 def apply_custom_palette(opts):
     opts.updateAtomPalette({
@@ -62,15 +70,58 @@ def apply_custom_palette(opts):
         53: (0.50, 0.24, 0.66),  # I - violet
     })
 
+def find_best_rotation(mol, width=500, height=500):
+    conf = mol.GetConformer()
+    points = [
+        (conf.GetAtomPosition(i).x, conf.GetAtomPosition(i).y)
+        for i in range(mol.GetNumAtoms())
+    ]
+
+    best_angle = 0
+    best_scale = 0
+
+    # Test orientations in 5-degree increments.
+    for angle in range(0, 180, 5):
+        radians = math.radians(angle)
+        cos_a = math.cos(radians)
+        sin_a = math.sin(radians)
+
+        rotated = [
+            (
+                x * cos_a - y * sin_a,
+                x * sin_a + y * cos_a,
+            )
+            for x, y in points
+        ]
+
+        xs = [x for x, _ in rotated]
+        ys = [y for _, y in rotated]
+
+        structure_width = max(xs) - min(xs)
+        structure_height = max(ys) - min(ys)
+
+        scale = min(
+            width / max(structure_width, 0.01),
+            height / max(structure_height, 0.01),
+        )
+
+        if scale > best_scale:
+            best_scale = scale
+            best_angle = angle
+
+    return best_angle
+
 
 @app.get("/render/svg")
 def render_svg(smiles: str):
-    mol = build_mol_from_smiles(smiles)
+    mol, has_depiction_override = build_mol_from_smiles(smiles)
 
     drawer = rdMolDraw2D.MolDraw2DSVG(500, 500)
     opts = drawer.drawOptions()
+    if not has_depiction_override:
+        opts.rotate = find_best_rotation(mol, 500, 500)
     opts.clearBackground = False
-    opts.bondLineWidth = 2.5
+    opts.bondLineWidth = 3.0
     opts.padding = 0.06
     opts.additionalAtomLabelPadding = 0.05
     opts.prepareMolsBeforeDrawing = True
