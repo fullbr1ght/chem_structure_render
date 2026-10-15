@@ -7,6 +7,9 @@ from rdkit.Chem import inchi
 
 app = FastAPI()
 
+MAX_SMILES_LENGTH = 1000
+MAX_ATOMS = 250
+
 DEPICTIONS_DIR = Path(__file__).parent / "depictions"
 
 def load_depiction_overrides():
@@ -29,16 +32,19 @@ def load_depiction_overrides():
 DEPICTION_OVERRIDES = load_depiction_overrides()
 
 def build_mol_from_smiles(smiles: str):
+    if len(smiles) > MAX_SMILES_LENGTH:
+        raise HTTPException(status_code=413, detail="SMILES is too long")
+
     mol = Chem.MolFromSmiles(smiles)
 
     if mol is None:
         raise HTTPException(status_code=400, detail="Invalid SMILES")
 
-    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
-    inchikey = inchi.MolToInchiKey(mol)
-
-    if inchikey in DEPICTION_OVERRIDES:
-        return Chem.Mol(DEPICTION_OVERRIDES[inchikey])
+    if mol.GetNumAtoms() > MAX_ATOMS:
+        raise HTTPException(
+            status_code=413,
+            detail="Structure has too many atoms",
+        )
 
     rdDepictor.Compute2DCoords(mol)
     return mol
