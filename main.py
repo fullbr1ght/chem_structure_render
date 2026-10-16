@@ -113,7 +113,10 @@ def find_best_rotation(mol, width=500, height=500):
 
 
 @app.get("/render/svg")
-def render_svg(smiles: str):
+def render_svg(
+    smiles: str,
+    highlight_stereo: bool = False,
+):
     mol, has_depiction_override = build_mol_from_smiles(smiles)
 
     drawer = rdMolDraw2D.MolDraw2DSVG(500, 500)
@@ -125,12 +128,54 @@ def render_svg(smiles: str):
     opts.padding = 0.06
     opts.additionalAtomLabelPadding = 0.05
     opts.prepareMolsBeforeDrawing = True
-    opts.baseFontSize = 0.7
-    opts.maxFontSize = 22
+    opts.baseFontSize = 0.75
+    opts.maxFontSize = 26
     opts.splitBonds = False
-    apply_custom_palette(opts)
 
-    drawer.DrawMolecule(mol)
+    if highlight_stereo:
+        opts.useBWAtomPalette()
+    else:
+        apply_custom_palette(opts)
+
+    if highlight_stereo:
+        Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+        chiral_centers = Chem.FindMolChiralCenters(
+            mol,
+            includeUnassigned=True,
+            includeCIP=True,
+            useLegacyImplementation=False,
+        )
+
+        for atom_index, assignment in chiral_centers:
+            if assignment == "?":
+                mol.GetAtomWithIdx(atom_index).SetProp("atomNote", "(?)")
+
+        opts.addStereoAnnotation = True
+        opts.setAtomNoteColour((0.95, 0.55, 0.10))
+        opts.atomHighlightsAreCircles = True
+        opts.fillHighlights = True
+
+        highlight_atoms = [
+            atom_index
+            for atom_index, _ in chiral_centers
+        ]
+        highlight_colors = {
+            atom_index: (0.95, 0.55, 0.10, 0.25)
+            for atom_index in highlight_atoms
+        }
+        highlight_radii = {
+            atom_index: 0.32
+            for atom_index in highlight_atoms
+        }
+
+        drawer.DrawMolecule(
+            mol,
+            highlightAtoms=highlight_atoms,
+            highlightAtomColors=highlight_colors,
+            highlightAtomRadii=highlight_radii,
+        )
+    else:
+        drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
 
     svg = drawer.GetDrawingText()
