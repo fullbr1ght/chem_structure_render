@@ -121,11 +121,12 @@ def render_svg(smiles: str):
     if not has_depiction_override:
         opts.rotate = find_best_rotation(mol, 500, 500)
     opts.clearBackground = False
-    opts.bondLineWidth = 3.0
+    opts.bondLineWidth = 2.5
     opts.padding = 0.06
     opts.additionalAtomLabelPadding = 0.05
     opts.prepareMolsBeforeDrawing = True
     opts.baseFontSize = 0.7
+    opts.maxFontSize = 22
     opts.splitBonds = False
     apply_custom_palette(opts)
 
