@@ -33,6 +33,64 @@ def load_depiction_overrides():
 
 DEPICTION_OVERRIDES = load_depiction_overrides()
 
+def prefer_heteroatom_stereo_bonds(mol):
+    """Prefer drawing stereobonds to heteroatoms instead of the carbon spine."""
+    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+
+    chiral_centers = {
+        atom_index
+        for atom_index, assignment in Chem.FindMolChiralCenters(
+            mol,
+            includeUnassigned=False,
+            includeCIP=True,
+            useLegacyImplementation=False,
+        )
+        if assignment != "?"
+    }
+
+    if not chiral_centers or mol.GetNumConformers() == 0:
+        return
+
+    conformer = mol.GetConformer()
+    Chem.WedgeMolBonds(mol, conformer)
+
+    for atom_index in chiral_centers:
+        atom = mol.GetAtomWithIdx(atom_index)
+        candidates = []
+
+        for bond in atom.GetBonds():
+            other_atom = bond.GetOtherAtom(atom)
+
+            if bond.GetBondType() != Chem.BondType.SINGLE:
+                continue
+
+            # Prefer labeled heteroatom substituents such as NH2 and OH.
+            if other_atom.GetAtomicNum() in (1, 6):
+                continue
+
+            candidates.append((
+                other_atom.GetDegree() == 1,
+                not bond.IsInRing(),
+                other_atom.GetIdx() not in chiral_centers,
+                -bond.GetIdx(),
+                bond,
+            ))
+
+        if not candidates:
+            continue
+
+        preferred_bond = max(candidates, key=lambda item: item[:-1])[-1]
+
+        # Remove RDKit's existing choice for this center before replacing it.
+        for bond in atom.GetBonds():
+            if (
+                bond.GetBondDir()
+                in (Chem.BondDir.BEGINWEDGE, Chem.BondDir.BEGINDASH)
+            ):
+                bond.SetBondDir(Chem.BondDir.NONE)
+
+        Chem.WedgeBond(preferred_bond, atom_index, conformer)
+
 def build_mol_from_smiles(smiles: str):
     if len(smiles) > MAX_SMILES_LENGTH:
         raise HTTPException(status_code=413, detail="SMILES is too long")
@@ -55,6 +113,7 @@ def build_mol_from_smiles(smiles: str):
         return Chem.Mol(override), True
 
     rdDepictor.Compute2DCoords(mol)
+    prefer_heteroatom_stereo_bonds(mol)
     return mol, False
 
 def apply_custom_palette(opts):
