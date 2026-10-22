@@ -128,6 +128,8 @@ def render_svg(
     opts.padding = 0.06
     opts.additionalAtomLabelPadding = 0.05
     opts.prepareMolsBeforeDrawing = True
+    if has_depiction_override:
+        opts.useMolBlockWedging = True
     opts.baseFontSize = 0.75
     opts.maxFontSize = 26
     opts.splitBonds = False
