@@ -164,7 +164,7 @@ def render_svg(
             for atom_index in highlight_atoms
         }
         highlight_radii = {
-            atom_index: 0.32
+            atom_index: 0.15
             for atom_index in highlight_atoms
         }
 
