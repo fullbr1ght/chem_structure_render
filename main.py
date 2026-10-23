@@ -34,10 +34,10 @@ def load_depiction_overrides():
 DEPICTION_OVERRIDES = load_depiction_overrides()
 
 def prefer_heteroatom_stereo_bonds(mol):
-    """Prefer drawing stereobonds to heteroatoms instead of the carbon spine."""
+    """Prefer N/O stereobonds for simple adjacent amino-alcohol centers."""
     Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
 
-    chiral_centers = {
+    chiral_centers = [
         atom_index
         for atom_index, assignment in Chem.FindMolChiralCenters(
             mol,
@@ -46,50 +46,68 @@ def prefer_heteroatom_stereo_bonds(mol):
             useLegacyImplementation=False,
         )
         if assignment != "?"
-    }
+    ]
 
-    if not chiral_centers or mol.GetNumConformers() == 0:
+    # Keep this rule deliberately narrow. Complex molecules such as steroids
+    # and Mitragyna alkaloids should retain RDKit's normal H-aware wedging.
+    if len(chiral_centers) != 2 or mol.GetNumConformers() == 0:
+        return
+
+    first_center, second_center = chiral_centers
+    first_atom = mol.GetAtomWithIdx(first_center)
+    second_atom = mol.GetAtomWithIdx(second_center)
+
+    if (
+        first_atom.GetAtomicNum() != 6
+        or second_atom.GetAtomicNum() != 6
+        or mol.GetBondBetweenAtoms(first_center, second_center) is None
+    ):
+        return
+
+    def find_amine_bond(atom):
+        for bond in atom.GetBonds():
+            other_atom = bond.GetOtherAtom(atom)
+            if (
+                bond.GetBondType() == Chem.BondType.SINGLE
+                and other_atom.GetAtomicNum() == 7
+                and not other_atom.IsInRing()
+            ):
+                return bond
+        return None
+
+    def find_hydroxyl_bond(atom):
+        for bond in atom.GetBonds():
+            other_atom = bond.GetOtherAtom(atom)
+            if (
+                bond.GetBondType() == Chem.BondType.SINGLE
+                and other_atom.GetAtomicNum() == 8
+                and other_atom.GetDegree() == 1
+            ):
+                return bond
+        return None
+
+    first_amine = find_amine_bond(first_atom)
+    first_hydroxyl = find_hydroxyl_bond(first_atom)
+    second_amine = find_amine_bond(second_atom)
+    second_hydroxyl = find_hydroxyl_bond(second_atom)
+
+    if first_amine is not None and second_hydroxyl is not None:
+        preferred_bonds = {
+            first_center: first_amine,
+            second_center: second_hydroxyl,
+        }
+    elif first_hydroxyl is not None and second_amine is not None:
+        preferred_bonds = {
+            first_center: first_hydroxyl,
+            second_center: second_amine,
+        }
+    else:
         return
 
     conformer = mol.GetConformer()
 
-    for atom_index in chiral_centers:
+    for atom_index, preferred_bond in preferred_bonds.items():
         atom = mol.GetAtomWithIdx(atom_index)
-        candidates = []
-
-        for bond in atom.GetBonds():
-            other_atom = bond.GetOtherAtom(atom)
-
-            if bond.GetBondType() != Chem.BondType.SINGLE:
-                continue
-
-            atomic_number = other_atom.GetAtomicNum()
-            is_non_ring_amine = (
-                atomic_number == 7
-                and not other_atom.IsInRing()
-            )
-            is_terminal_heteroatom = (
-                atomic_number not in (1, 6, 7)
-                and other_atom.GetDegree() == 1
-            )
-
-            # Prefer NH2/NHR/NR2 groups outside rings, plus terminal OH and
-            # halogens. Embedded ring nitrogens and ether oxygens are ignored.
-            if not (is_non_ring_amine or is_terminal_heteroatom):
-                continue
-
-            candidates.append((
-                other_atom.GetDegree() == 1,
-                not bond.IsInRing(),
-                other_atom.GetIdx() not in chiral_centers,
-                -bond.GetIdx(),
-                bond,
-            ))
-
-        if not candidates:
-            continue
-
-        preferred_bond = max(candidates, key=lambda item: item[:-1])[-1]
 
         # Remove RDKit's existing choice for this center before replacing it.
         for bond in atom.GetBonds():
