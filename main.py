@@ -64,8 +64,19 @@ def prefer_heteroatom_stereo_bonds(mol):
             if bond.GetBondType() != Chem.BondType.SINGLE:
                 continue
 
-            # Prefer labeled heteroatom substituents such as NH2 and OH.
-            if other_atom.GetAtomicNum() in (1, 6):
+            atomic_number = other_atom.GetAtomicNum()
+            is_non_ring_amine = (
+                atomic_number == 7
+                and not other_atom.IsInRing()
+            )
+            is_terminal_heteroatom = (
+                atomic_number not in (1, 6, 7)
+                and other_atom.GetDegree() == 1
+            )
+
+            # Prefer NH2/NHR/NR2 groups outside rings, plus terminal OH and
+            # halogens. Embedded ring nitrogens and ether oxygens are ignored.
+            if not (is_non_ring_amine or is_terminal_heteroatom):
                 continue
 
             candidates.append((
