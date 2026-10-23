@@ -52,7 +52,6 @@ def prefer_heteroatom_stereo_bonds(mol):
         return
 
     conformer = mol.GetConformer()
-    Chem.WedgeMolBonds(mol, conformer)
 
     for atom_index in chiral_centers:
         atom = mol.GetAtomWithIdx(atom_index)
