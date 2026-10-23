@@ -33,92 +33,6 @@ def load_depiction_overrides():
 
 DEPICTION_OVERRIDES = load_depiction_overrides()
 
-def prefer_heteroatom_stereo_bonds(mol):
-    """Prefer N/O stereobonds for simple adjacent amino-alcohol centers."""
-    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
-
-    chiral_centers = [
-        atom_index
-        for atom_index, assignment in Chem.FindMolChiralCenters(
-            mol,
-            includeUnassigned=False,
-            includeCIP=True,
-            useLegacyImplementation=False,
-        )
-        if assignment != "?"
-    ]
-
-    # Keep this rule deliberately narrow. Complex molecules such as steroids
-    # and Mitragyna alkaloids should retain RDKit's normal H-aware wedging.
-    if len(chiral_centers) != 2 or mol.GetNumConformers() == 0:
-        return
-
-    first_center, second_center = chiral_centers
-    first_atom = mol.GetAtomWithIdx(first_center)
-    second_atom = mol.GetAtomWithIdx(second_center)
-
-    if (
-        first_atom.GetAtomicNum() != 6
-        or second_atom.GetAtomicNum() != 6
-        or mol.GetBondBetweenAtoms(first_center, second_center) is None
-    ):
-        return
-
-    def find_amine_bond(atom):
-        for bond in atom.GetBonds():
-            other_atom = bond.GetOtherAtom(atom)
-            if (
-                bond.GetBondType() == Chem.BondType.SINGLE
-                and other_atom.GetAtomicNum() == 7
-                and not other_atom.IsInRing()
-            ):
-                return bond
-        return None
-
-    def find_hydroxyl_bond(atom):
-        for bond in atom.GetBonds():
-            other_atom = bond.GetOtherAtom(atom)
-            if (
-                bond.GetBondType() == Chem.BondType.SINGLE
-                and other_atom.GetAtomicNum() == 8
-                and other_atom.GetDegree() == 1
-            ):
-                return bond
-        return None
-
-    first_amine = find_amine_bond(first_atom)
-    first_hydroxyl = find_hydroxyl_bond(first_atom)
-    second_amine = find_amine_bond(second_atom)
-    second_hydroxyl = find_hydroxyl_bond(second_atom)
-
-    if first_amine is not None and second_hydroxyl is not None:
-        preferred_bonds = {
-            first_center: first_amine,
-            second_center: second_hydroxyl,
-        }
-    elif first_hydroxyl is not None and second_amine is not None:
-        preferred_bonds = {
-            first_center: first_hydroxyl,
-            second_center: second_amine,
-        }
-    else:
-        return
-
-    conformer = mol.GetConformer()
-
-    for atom_index, preferred_bond in preferred_bonds.items():
-        atom = mol.GetAtomWithIdx(atom_index)
-
-        # Remove RDKit's existing choice for this center before replacing it.
-        for bond in atom.GetBonds():
-            if (
-                bond.GetBondDir()
-                in (Chem.BondDir.BEGINWEDGE, Chem.BondDir.BEGINDASH)
-            ):
-                bond.SetBondDir(Chem.BondDir.NONE)
-
-        Chem.WedgeBond(preferred_bond, atom_index, conformer)
-
 def build_mol_from_smiles(smiles: str):
     if len(smiles) > MAX_SMILES_LENGTH:
         raise HTTPException(status_code=413, detail="SMILES is too long")
@@ -141,7 +55,6 @@ def build_mol_from_smiles(smiles: str):
         return Chem.Mol(override), True
 
     rdDepictor.Compute2DCoords(mol)
-    prefer_heteroatom_stereo_bonds(mol)
     return mol, False
 
 def apply_custom_palette(opts):
